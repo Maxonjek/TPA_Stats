@@ -1,4 +1,4 @@
-CREATE TABLE machine_state_intervals
+CREATE TABLE IF NOT EXISTS machine_state_intervals
 (
     machine_id   UInt64,
 

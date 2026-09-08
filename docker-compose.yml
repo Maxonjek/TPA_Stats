@@ -40,7 +40,9 @@ services:
 
     environment:
       CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE}
-
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: ${CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT}
     ports:
       - "${CLICKHOUSE_HTTP_PORT}:8123"
       - "${CLICKHOUSE_NATIVE_PORT}:9000"
@@ -48,8 +50,6 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
-
-      - ./BD/setup_scripts/ClickHouse:/docker-entrypoint-initdb.d:ro
 
     networks:
       - mes
@@ -65,11 +65,65 @@ services:
       retries: 20
       start_period: 20s
 
+  clickhouse-init:
+    image: clickhouse/clickhouse-server:25.8
+    container_name: mes-clickhouse-init
+
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
+    environment:
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE}
+
+    volumes:
+      - ./BD/setup_scripts/ClickHouse:/scripts:ro
+
+    networks:
+      - mes
+
+    entrypoint: ["/bin/bash", "-c"]
+
+    command:
+      - |
+        set -e
+  
+        echo "Waiting for ClickHouse..."
+  
+        until clickhouse-client \
+          --host clickhouse \
+          --user "$$CLICKHOUSE_USER" \
+          --password "$$CLICKHOUSE_PASSWORD" \
+          --database "$$CLICKHOUSE_DATABASE" \
+          --query "SELECT 1" >/dev/null 2>&1
+        do
+          sleep 1
+        done
+  
+        echo "ClickHouse is ready."
+  
+        for file in /scripts/*.sql; do
+          echo "Executing $$file..."
+  
+          clickhouse-client \
+            --host clickhouse \
+            --user "$$CLICKHOUSE_USER" \
+            --password "$$CLICKHOUSE_PASSWORD" \
+            --database "$$CLICKHOUSE_DATABASE" \
+            --multiquery < "$$file"
+        done
+  
+        echo "ClickHouse initialization completed."
+
+    restart: "no"
+
+
 
 networks:
   mes:
     name: mes-network
-
 
 volumes:
   mysql_data:

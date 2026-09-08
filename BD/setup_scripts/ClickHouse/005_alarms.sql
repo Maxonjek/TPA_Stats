@@ -1,4 +1,4 @@
-CREATE TABLE machine_alarms
+CREATE TABLE IF NOT EXISTS machine_alarms
 (
     machine_id  UInt64,
 

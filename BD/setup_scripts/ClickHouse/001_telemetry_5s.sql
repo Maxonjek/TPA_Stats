@@ -1,4 +1,4 @@
-CREATE TABLE telemetry_5s
+CREATE TABLE IF NOT EXISTS telemetry_5s
 (
     ts                   DateTime64(3, 'UTC'),
     machine_id           UInt64,

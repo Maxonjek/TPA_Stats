@@ -1,4 +1,4 @@
-CREATE TABLE production_cycles
+CREATE TABLE IF NOT EXISTS production_cycles
 (
     machine_id               UInt64,
     cycle_id                 UInt64,
