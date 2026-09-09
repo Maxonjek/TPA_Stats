@@ -119,6 +119,40 @@ services:
 
     restart: "no"
 
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: mes-app
+
+    restart: unless-stopped
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+      clickhouse-init:
+        condition: service_completed_successfully
+
+    env_file:
+      - .env
+
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 9000
+
+    ports:
+      - "${APP_PORT:-8000}:8000"
+
+    networks:
+      - mes
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "keba-TPA-01:192.168.1.100"
 
 
 networks:

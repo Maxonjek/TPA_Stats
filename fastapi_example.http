@@ -1,0 +1,18 @@
+### home
+GET http://127.0.0.1:8000/
+Accept: application/json
+
+### Test main
+GET http://127.0.0.1:8000/ping
+Accept: application/json
+
+
+### Get all machines
+GET http://127.0.0.1:8000/api/machines
+Accept: application/json
+
+
+### Get specific machine
+GET http://127.0.0.1:8000/api/machines/TPA-01
+Accept: application/json
+
