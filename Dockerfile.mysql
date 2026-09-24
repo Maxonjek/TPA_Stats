@@ -1,0 +1,3 @@
+FROM mysql:8.4
+
+COPY BD/setup_scripts/MySQL/*.sql /docker-entrypoint-initdb.d/

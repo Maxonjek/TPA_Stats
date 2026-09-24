@@ -160,9 +160,14 @@ class KebaConnectionRequest(ConnectionRequest):
         self,
         machine_id: str,
         groups: Iterable[PollGroup] = DEFAULT_GROUPS,
+        resolve_retry_interval: float = 10.0,
     ):
+        if resolve_retry_interval <= 0:
+            raise ValueError("resolve_retry_interval must be > 0")
+
         self.machine_id = machine_id
         self.groups = tuple(groups)
+        self.resolve_retry_interval = resolve_retry_interval
 
         self._host: Optional[str] = None
         self._port: Optional[int] = None
@@ -171,6 +176,7 @@ class KebaConnectionRequest(ConnectionRequest):
         self._resolved_by_name: dict[str, Any] = {}
         self._resolve_errors: dict[str, str] = {}
         self._last_group_read: dict[str, float] = {}
+        self._last_resolve_retry: Optional[float] = None
 
     def close(self) -> None:
         if self._client is not None:
@@ -180,6 +186,7 @@ class KebaConnectionRequest(ConnectionRequest):
         self._resolved_by_name.clear()
         self._resolve_errors.clear()
         self._last_group_read.clear()
+        self._last_resolve_retry = None
 
     def _all_variables(self) -> list[str]:
         return list(
@@ -225,6 +232,60 @@ class KebaConnectionRequest(ConnectionRequest):
             if item.result != 0
         }
 
+        # Start the retry timer from the initial resolve. Failed paths will be
+        # retried periodically while the existing RPC connection stays alive.
+        self._last_resolve_retry = time.monotonic()
+
+    def _retry_failed_resolves(self, now_mono: float) -> None:
+        if self._client is None or not self._resolve_errors:
+            return
+
+        if (
+            self._last_resolve_retry is not None
+            and now_mono - self._last_resolve_retry < self.resolve_retry_interval
+        ):
+            return
+
+        self._last_resolve_retry = now_mono
+        failed_names = list(self._resolve_errors)
+
+        try:
+            resolved = resolve_variables(
+                self._client,
+                failed_names,
+                raw_names=False,
+            )
+        except Exception:
+            # A retry failure must not tear down an otherwise working RPC
+            # connection. Keep the previous errors and try again later.
+            logging.getLogger(__name__).debug(
+                "KEBA re-resolve failed for %s (%d variables)",
+                self.machine_id,
+                len(failed_names),
+                exc_info=True,
+            )
+            return
+
+        recovered: list[str] = []
+
+        for item in resolved:
+            name = item.requested_name
+
+            if item.result == 0 and item.node_id is not None:
+                self._resolved_by_name[name] = item
+                self._resolve_errors.pop(name, None)
+                recovered.append(name)
+            else:
+                self._resolve_errors[name] = result_text(item.result)
+
+        if recovered:
+            logging.getLogger(__name__).info(
+                "KEBA %s: re-resolved %d variable(s): %s",
+                self.machine_id,
+                len(recovered),
+                ", ".join(recovered),
+            )
+
     def _ensure_connection(self, host: str, port: int, timeout: float) -> None:
         expected_port = port if port > 0 else None
 
@@ -269,6 +330,8 @@ class KebaConnectionRequest(ConnectionRequest):
 
             if self._client is None:
                 raise RuntimeError("KEBA RPC client is not connected")
+
+            self._retry_failed_resolves(now_mono)
 
             groups_read, variables_to_read = self._read_due_groups(now_mono)
 
@@ -427,8 +490,11 @@ class LatestMesBuffer:
 
 
 class MesConnectionResponse(ConnectionResponse):
-    def __init__(self, buffer: LatestMesBuffer):
+    def __init__(self, buffer: LatestMesBuffer,updater=None):
         self._buffer = buffer
+        self._updater = updater
 
     def __call__(self, response: dict[str, Any]) -> None:
+        if self._updater is not None:
+            self._updater.update(response)
         self._buffer.put(response)

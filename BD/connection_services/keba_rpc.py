@@ -85,11 +85,14 @@ RESULT_NAMES = {
     60: "NotAvailable",
 }
 
+
 class RpcError(RuntimeError):
     pass
 
+
 class XdrError(RuntimeError):
     pass
+
 
 class XdrWriter:
     def __init__(self):
@@ -112,6 +115,7 @@ class XdrWriter:
 
     def bytes(self) -> bytes:
         return bytes(self.buf)
+
 
 class XdrReader:
     def __init__(self, data: bytes):
@@ -158,6 +162,7 @@ class XdrReader:
     def string(self) -> str:
         return self.opaque().decode("latin-1", errors="replace")
 
+
 def recv_exact(sock: socket.socket, n: int) -> bytes:
     out = bytearray()
     while len(out) < n:
@@ -167,8 +172,8 @@ def recv_exact(sock: socket.socket, n: int) -> bytes:
         out += part
     return bytes(out)
 
+
 def recv_rpc_record(sock: socket.socket) -> bytes:
-    
     chunks = []
     while True:
         marker = struct.unpack(">I", recv_exact(sock, 4))[0]
@@ -178,14 +183,15 @@ def recv_rpc_record(sock: socket.socket) -> bytes:
         if last_fragment:
             return b"".join(chunks)
 
+
 class OncRpcTcpClient:
     def __init__(
-        self,
-        host: str,
-        port: int,
-        program: int,
-        version: int,
-        timeout: float = 3.0,
+            self,
+            host: str,
+            port: int,
+            program: int,
+            version: int,
+            timeout: float = 3.0,
     ):
         self.host = host
         self.port = port
@@ -256,8 +262,8 @@ class OncRpcTcpClient:
 
         return reply[r.pos:]
 
+
 def rpcbind_getport(host: str, timeout: float) -> int:
-    
     w = XdrWriter()
     w.u32(VARSERVER_PROGRAM)
     w.u32(VARSERVER_VERSION)
@@ -265,11 +271,11 @@ def rpcbind_getport(host: str, timeout: float) -> int:
     w.u32(0)
 
     with OncRpcTcpClient(
-        host,
-        RPCBIND_PORT,
-        PMAP_PROGRAM,
-        PMAP_VERSION,
-        timeout,
+            host,
+            RPCBIND_PORT,
+            PMAP_PROGRAM,
+            PMAP_VERSION,
+            timeout,
     ) as rpc:
         reply = rpc.call(PMAPPROC_GETPORT, w.bytes())
 
@@ -281,12 +287,14 @@ def rpcbind_getport(host: str, timeout: float) -> int:
         )
     return port
 
+
 @dataclass
 class NodeId:
     checksum: int
     owner: int
     node_type: int
     handles: list[int]
+
 
 def pack_node_id(w: XdrWriter, node: NodeId):
     w.i32(node.checksum)
@@ -295,6 +303,7 @@ def pack_node_id(w: XdrWriter, node: NodeId):
     w.u32(len(node.handles))
     for item in node.handles:
         w.i32(item)
+
 
 def unpack_node_id(r: XdrReader) -> NodeId:
     checksum = r.i32()
@@ -310,6 +319,7 @@ def unpack_node_id(r: XdrReader) -> NodeId:
         handles=[r.i32() for _ in range(count)],
     )
 
+
 def normalize_path(name: str) -> str:
     if name.startswith(("APPL.", "SYS.")):
         return name
@@ -317,11 +327,11 @@ def normalize_path(name: str) -> str:
         name = name[4:]
     return "APPL." + name
 
+
 def resolve_paths(
-    rpc: OncRpcTcpClient,
-    variables: list[str],
+        rpc: OncRpcTcpClient,
+        variables: list[str],
 ) -> list[tuple[str, str, int, Optional[NodeId]]]:
-    
     paths = [normalize_path(v) for v in variables]
 
     w = XdrWriter()
@@ -372,6 +382,7 @@ def resolve_paths(
         )
 
     return result
+
 
 def read_value_payload(r: XdrReader) -> tuple[int, Any]:
     node_type = r.i32()
@@ -427,11 +438,11 @@ def read_value_payload(r: XdrReader) -> tuple[int, Any]:
 
     return node_type, value
 
+
 def read_values(
-    rpc: OncRpcTcpClient,
-    resolved: list[tuple[str, str, int, Optional[NodeId]]],
+        rpc: OncRpcTcpClient,
+        resolved: list[tuple[str, str, int, Optional[NodeId]]],
 ) -> list[dict[str, Any]]:
-    
     valid = [item for item in resolved if item[2] == 0 and item[3] is not None]
 
     if not valid:
@@ -498,6 +509,7 @@ def read_values(
 
     return out
 
+
 def main() -> None:
     host = DEFAULT_HOST
     timeout = 3.0
@@ -506,11 +518,11 @@ def main() -> None:
     port = rpcbind_getport(host, timeout)
 
     with OncRpcTcpClient(
-        host,
-        port,
-        VARSERVER_PROGRAM,
-        VARSERVER_VERSION,
-        timeout,
+            host,
+            port,
+            VARSERVER_PROGRAM,
+            VARSERVER_VERSION,
+            timeout,
     ) as rpc:
         resolved = resolve_paths(rpc, variables)
 
@@ -542,6 +554,7 @@ def main() -> None:
     }
 
     print(json.dumps(response, ensure_ascii=False, indent=2))
+
 
 if __name__ == "__main__":
     main()

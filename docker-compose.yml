@@ -1,7 +1,7 @@
 services:
 
   mysql:
-    image: mysql:8.4
+    image: tpa-stats-mysql:1.0.0
     container_name: mes-mysql
     restart: unless-stopped
 
@@ -16,7 +16,6 @@ services:
 
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./BD/setup_scripts/MySQL:/docker-entrypoint-initdb.d:ro
 
     networks:
       - mes
@@ -43,6 +42,7 @@ services:
       CLICKHOUSE_USER: ${CLICKHOUSE_USER}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: ${CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT}
+
     ports:
       - "${CLICKHOUSE_HTTP_PORT}:8123"
       - "${CLICKHOUSE_NATIVE_PORT}:9000"
@@ -65,8 +65,9 @@ services:
       retries: 20
       start_period: 20s
 
+
   clickhouse-init:
-    image: clickhouse/clickhouse-server:25.8
+    image: tpa-stats-clickhouse-init:1.0.0
     container_name: mes-clickhouse-init
 
     depends_on:
@@ -78,9 +79,6 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
       CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE}
 
-    volumes:
-      - ./BD/setup_scripts/ClickHouse:/scripts:ro
-
     networks:
       - mes
 
@@ -89,10 +87,10 @@ services:
     command:
       - |
         set -e
-  
+
         echo "Waiting for ClickHouse..."
-  
-        until clickhouse-client \
+
+        until clickhouse client \
           --host clickhouse \
           --user "$$CLICKHOUSE_USER" \
           --password "$$CLICKHOUSE_PASSWORD" \
@@ -101,31 +99,28 @@ services:
         do
           sleep 1
         done
-  
+
         echo "ClickHouse is ready."
-  
+
         for file in /scripts/*.sql; do
           echo "Executing $$file..."
-  
-          clickhouse-client \
+
+          clickhouse client \
             --host clickhouse \
             --user "$$CLICKHOUSE_USER" \
             --password "$$CLICKHOUSE_PASSWORD" \
             --database "$$CLICKHOUSE_DATABASE" \
             --multiquery < "$$file"
         done
-  
+
         echo "ClickHouse initialization completed."
 
     restart: "no"
 
+
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-
+    image: tpa-stats-app:1.1.1
     container_name: mes-app
-
     restart: unless-stopped
 
     depends_on:
@@ -142,22 +137,26 @@ services:
       MYSQL_PORT: 3306
 
       CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_PORT: 9000
+      CLICKHOUSE_HTTP_PORT: 8123
 
     ports:
-      - "${APP_PORT:-8000}:8000"
+      - "${API_PORT:-8000}:8000"
 
     networks:
       - mes
 
     extra_hosts:
       - "host.docker.internal:host-gateway"
-      - "keba-TPA-01:192.168.1.100"
+      - "keba-TPA-01:192.168.27.43"
+      - "keba-TPA-02:192.168.27.44"
+      - "keba-TPA-03:192.168.27.45"
+      - "keba-TPA-04:192.168.27.46"
 
 
 networks:
   mes:
     name: mes-network
+
 
 volumes:
   mysql_data:

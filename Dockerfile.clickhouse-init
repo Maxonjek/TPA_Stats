@@ -1,0 +1,4 @@
+FROM clickhouse/clickhouse-server:25.8
+COPY BD/setup_scripts/ClickHouse/ /scripts/
+RUN test -n "$(find /scripts -maxdepth 1 -type f -name '*.sql' -print -quit)" \
+    || (echo "No ClickHouse SQL scripts copied to /scripts" >&2; exit 1)

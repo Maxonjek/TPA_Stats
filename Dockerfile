@@ -1,12 +1,10 @@
 FROM python:3.12-slim
 
-# Не создавать .pyc и не буферизовать stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Системные зависимости
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         gcc \
@@ -15,13 +13,13 @@ RUN apt-get update \
         netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
-# Сначала requirements для кэширования Docker layer
 COPY BD/requirements.txt /app/requirements.txt
+COPY requirements.txt /app/requirements_main.txt
 
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r /app/requirements.txt
+    && pip install --no-cache-dir -r /app/requirements.txt \
+    && pip install --no-cache-dir -r /app/requirements_main.txt
 
-# Копируем приложение
 COPY main.py /app/main.py
 COPY BD /app/BD
 

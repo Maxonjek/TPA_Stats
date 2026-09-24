@@ -1,0 +1,4 @@
+mysql-connector-python~=26.7.0
+uvicorn~=0.38.0
+fastapi~=0.122.0
+clickhouse-connect~=1.8.0
